@@ -1,0 +1,11 @@
+.env
+.venv/
+node_modules/
+__pycache__/
+*.pyc
+.DS_Store
+build/
+dist/
+# private zone: raw resumes and the database never get committed
+data/private/
+out/*.sqlite
