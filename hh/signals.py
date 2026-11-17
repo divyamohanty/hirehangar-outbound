@@ -83,14 +83,14 @@ def compute(con, as_of):
         recent = [p for a, _, p in ages if 0 <= a <= 14]
         stale = [p for _, s, p in ages if s >= 21 and _d(p["last_seen"]) and (as_of - _d(p["last_seen"])).days <= 2]
         if fresh:
-            sig.append((dom, "fresh_post", 0.9, fresh[0]["title"]))
+            sig.append((dom, "fresh_post", 0.85, fresh[0]["title"]))
         elif recent:
             sig.append((dom, "recent_post", 0.6, recent[0]["title"]))
         if stale:
             sig.append((dom, "still_open", 0.65, stale[0]["title"]))
         off = [p for p in ps if p["offshore_location"]]
         if off:
-            sig.append((dom, "offshore_post", 0.95, f"{off[0]['title']} ({off[0]['location']})"))
+            sig.append((dom, "offshore_post", 0.9, f"{off[0]['title']} ({off[0]['location']})"))
         per_bucket = Counter(p["bucket"] for age, _s, p in ages if 0 <= age <= 7)
         b, n = (per_bucket.most_common(1) or [(None, 0)])[0]
         if n >= 2:

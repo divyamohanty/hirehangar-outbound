@@ -90,10 +90,17 @@ def run(con, as_of):
 
         bucket = max(set(buckets[dom]), key=buckets[dom].count) if buckets[dom] else None
         b = bench.get(bucket) or {}
-        fill = round(min(1.0, max(0.2, (b.get("available") or 0) / 25)), 2)
+        if bench:
+            fill = round(min(1.0, max(0.2, (b.get("available") or 0) / 25)), 2)
+        else:  # no applications loaded yet (public-only run): don't let an empty bench flatten every score
+            fill = 0.8
+            reasons.append("fill not measured (no applications loaded)")
 
         timing_sigs = {k: v for k, v in s.items() if k != "spike"}
         timing = max([v["strength"] * w.get(k, 1.0) for k, v in timing_sigs.items()] or [0.0])
+        n_open = con.execute("SELECT COUNT(*) FROM job_posts WHERE domain=?", (dom,)).fetchone()[0]
+        if n_open > 1:  # several relevant roles open = more urgency; small, capped tie-breaker
+            timing = min(1.0, timing + min(0.08, 0.01 * (n_open - 1)))
         if "vendor" in s and len(timing_sigs) > 1:
             timing = min(1.0, timing + 0.1)
         top = max(timing_sigs, key=lambda k: timing_sigs[k]["strength"] * w.get(k, 1.0)) if timing_sigs else "spike"
@@ -102,7 +109,11 @@ def run(con, as_of):
         send_after = next_send_window(as_of)
         if "fresh_post" in s or "recent_post" in s:
             play = "after_post"
-            fact = f"has an open {(s.get('fresh_post') or s.get('recent_post'))['detail']} role"
+            # the hook must be a role in the bucket we pitch (don't cite a brand role and offer engineers)
+            match = con.execute("SELECT title FROM job_posts WHERE domain=? AND bucket=? ORDER BY posted_at DESC LIMIT 1",
+                                (dom, bucket)).fetchone()
+            title = match["title"] if match else (s.get("fresh_post") or s.get("recent_post"))["detail"]
+            fact = f"has an open {title} role"
         elif "still_open" in s:
             play = "still_open"
             fact = f"the {s['still_open']['detail']} role has been open a few weeks"
@@ -119,6 +130,8 @@ def run(con, as_of):
         else:
             play, fact = "hold_no_public_fact", None  # private signal only: wait for a public trigger
 
+        if fact:
+            fact = " ".join(fact.split())  # job titles often carry stray spaces
         if "spike" in s and play != "spike_wait":
             reasons.append("recent spike: lead with flexible monthly cost")
         reasons += [f"{k}: {v['detail']}" if k not in PRIVATE_SIGNALS else f"{k} (private, company-level)"

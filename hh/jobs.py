@@ -108,6 +108,7 @@ def pull_live(con, seeds_csv=None, limit=None, workers=8):
             for p in res:
                 stats["kept"] += _upsert(con, s["domain"], s["company"], p, s["ats"], today)
             con.execute("INSERT OR IGNORE INTO companies (domain,name) VALUES (?,?)", (s["domain"], s["company"]))
+    apply_overrides(con)
     con.commit()
     return stats
 

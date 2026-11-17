@@ -29,7 +29,7 @@ def build(a, contact, bench):
     first = _first(contact.get("full_name") if contact else None)
     rate = (bench.get(b) or {}).get("median_rate_usd")
     if a["play"] == "after_post":
-        subj, body = f"the {b.lower()} role at {co}", (
+        subj, body = f"the {SEATS.get(b, b.lower())} role at {co}", (
             f"Hi {first}, saw {co} {fact}. We've got vetted {who} who've worked with US teams and keep US hours. "
             f"Flat monthly fee, no placement fee, cancel any month.\n\nWant me to send three profiles?")
     elif a["play"] == "still_open":
@@ -43,7 +43,7 @@ def build(a, contact, bench):
             f"We keep vetted {who} who work US hours ready to start within a week, on a flat monthly fee.\n\n"
             f"Want a few profiles on file for when the need shows up?")
     cost = (f"For context: a {b} hire through us is around ${rate:,}/month all in, vs a US salary plus "
-            f"benefits and a 20% agency fee." if rate else "Happy to share a cost comparison for the role.")
+            f"benefits and a 20% agency fee." if rate else "happy to share a cost comparison for the role.")
     return [
         (0, 0, "email", subj, body),
         (1, 2, "linkedin", "", f"Hi {first}, sent you a note about {who} for {co}. Happy to connect."),
@@ -54,10 +54,12 @@ def build(a, contact, bench):
     ]
 
 
-def lint(text, step, private_details, company=""):
+def lint(text, step, private_details, company="", public_fact=""):
     problems = []
-    if company:  # "Applied Compute" is a company name, not a leak
-        text = re.sub(re.escape(company), "COMPANY", text, flags=re.I)
+    # company names and public job titles are public ("Applied Compute", "Applied AI Engineer")
+    for public in (company, public_fact):
+        if public:
+            text = re.sub(re.escape(public), "PUBLIC", text, flags=re.I)
     if FORBIDDEN.search(text):
         problems.append(f"forbidden word: {FORBIDDEN.search(text).group(0)}")
     for d in private_details:  # nothing derived from applications may appear verbatim
@@ -81,7 +83,7 @@ def run(con, as_of=None):
         contact = con.execute("SELECT * FROM contacts WHERE domain=? ORDER BY email IS NULL LIMIT 1", (a["domain"],)).fetchone()
         start = dt.date.fromisoformat(a["send_after"])
         for step, day, ch, subj, body in build(dict(a), dict(contact) if contact else None, bench):
-            problems = lint(subj + "\n" + body, step, private, a["name"])
+            problems = lint(subj + "\n" + body, step, private, a["name"], a["public_fact"] or "")
             blocked += bool(problems)
             send = start + dt.timedelta(days=day)
             con.execute("INSERT OR REPLACE INTO drafts VALUES (?,?,?,?,?,?,?,?)",
